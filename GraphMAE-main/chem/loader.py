@@ -264,7 +264,8 @@ def create_standardized_mol_id(smiles):
     else:
         return
 
-# InMemoryDataset，一次性加载到内存
+from torch_geometric.data import InMemoryDataset 
+from torch_geometric.data import Data
 class MoleculeDataset(InMemoryDataset):
     def __init__(self,
                  root, # 数据根目录
@@ -285,44 +286,23 @@ class MoleculeDataset(InMemoryDataset):
         """
         self.dataset = dataset
         self.root = root
-
-        # 调用父类构造函数
-        """
-        __init__()
-            ├── check_processed_files()
-            ├── if not exist:
-            │       process()
-            └── load processed
-        """
         super(MoleculeDataset, self).__init__(root, transform, pre_transform,
                                                  pre_filter)
         # 强制恢复用户输入配置。
         self.transform, self.pre_transform, self.pre_filter = transform, pre_transform, pre_filter
-
-        # processed_paths 是InMemoryDataset提供的属性,它会返回一个已处理文件的完整路径列表。
-        # self.processed_paths[0]就是/home/user/dataset/processed/data.pt
-        # slices记录每个图的边界
         if not empty:
             self.data, self.slices = torch.load(self.processed_paths[0])
 
     # 根据索引 idx 取出单张图对象
     def get(self, idx):
         data = Data()
-        
         # keys 通常是：['x', 'edge_index', 'edge_attr', 'y']
         for key in self.data.keys:
-            item, slices = self.data[key], self.slices[key] # 按key取数据，如key为节点特征
-            # 则item存储所有图的节点特征拼接的大张量
-            #，slices辅助分割大张量得到单个图的节点特征张量。
-            
+            item, slices = self.data[key], self.slices[key] 
             # slice(None)等价于 :，在 Python 中表示“取这一维的全部元素”
-            s = list(repeat(slice(None), item.dim())) # 生成一个长度为 item.dim() 的列表，每一维都是 ":" (全选)
-            
-            # slice(slices[idx], slices[idx + 1])对应第 idx 张图在大张量的位置
-            # data.__cat_dim__(key, item)告诉我们这个key的张量item沿哪一维拼接所有图
+            s = list(repeat(slice(None), item.dim())) 
             s[data.__cat_dim__(key, item)] = slice(slices[idx],
                                                     slices[idx + 1])
-            
             # 取出第 idx 张图在该 key 上的数据，赋值给单张图对象 data[key]
             data[key] = item[s]
         return data
@@ -343,7 +323,6 @@ class MoleculeDataset(InMemoryDataset):
         raise NotImplementedError('Must indicate valid location of raw data. '
                                   'No download allowed')
     
-    # 把原始分子数据文件转换成 PyG 图对象序列化保存，执行一次后，下次加载不会再运行（除非删除 processed 文件）
     def process(self):
         # smiles是将分子的原子、键、环、支链等结构信息编码为字符串的化学信息学表示标准
         data_smiles_list = [] # 保存合法 SMILES 字符串
@@ -359,20 +338,8 @@ class MoleculeDataset(InMemoryDataset):
             for i in range(len(smiles_list)): # 逐条处理样本
                 s = smiles_list[i] # 取第 i 个分子字符串
                 try:
-                    # Mol 对象是化学信息学库 RDKit 中用于表示一个分子结构的核心数据结构，是一个图结构对象
                     rdkit_mol = AllChem.MolFromSmiles(s) # 把字符串解析成分子图对象
                     if rdkit_mol != None:  # 忽略非法分子
-                        # RDKit → PyG图对象，包含x（节点特征）, edge_index（边索引）, edge_attr（边特征）
-                        # data.x即为原子特征，是一个 长度为 2 的整数列表（vector）：
-                        # 第 0 个元素：原子在 possible_atomic_num_list 中的索引
-                        # 第 1 个元素：原子在 possible_chirality_list 中的索引
-                        # possible_atomic_num_list是原子序数列表，从 1 到 118（氢到 oganesson）
-                        # possible_chirality_list是一个手性类型列表（Chiral Tag），用于描述原子的空间手性：
-                        # edge_attr 是一个 长度为 2 的整数列表
-                        # 第 0 个元素：键类型在 possible_bonds 列表中的索引
-                        # 第 1 个元素：键方向在 possible_bond_dirs 列表中的索引
-                        # possible_bonds 是可能的化学键类型列表
-                        # possible_bond_dirs是双键方向（立体化学信息）的列表
                         data = mol_to_graph_data_obj_simple(rdkit_mol)
                         # 把字符串形式的 ZINC 分子编号解析成整数 ID（去掉前缀和前导零）
                         id = int(zinc_id_list[i].split('ZINC')[1].lstrip('0'))
