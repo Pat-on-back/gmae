@@ -238,13 +238,6 @@ class MaskAtom:
         data.masked_atom_indices = torch.tensor(masked_atom_indices) # 保存mask索引
 
         # ----------- graphMAE -----------
-        # one-hot 向量，shape：[num_masked_nodes, num_atom_type]
-        # data.mask_node_label[:, 0]取 mask 节点的 原子类型索引，如 [5, 0, 6]代表 C、H、N 等原子
-        """
-        假设 self.num_atom_type = 6，输入 [1,3] → 输出：
-        [[0,1,0,0,0,0],
-        [0,0,0,1,0,0]]
-        """
         atom_type = F.one_hot(data.mask_node_label[:, 0], num_classes=self.num_atom_type).float()
         # 最终标节点标签
         data.node_attr_label = atom_type
