@@ -55,7 +55,7 @@ class DataLoaderMaskingPred(torch.utils.data.DataLoader):
     """
     def __init__(self, dataset, batch_size=1, shuffle=True,
                  mask_rate=0.0, mask_edge=0.0, **kwargs):
-
+        # 在 DataLoader 取出每个样本时，对样本执行原子掩码（mask）操作
         self._transform = MaskAtom(
             num_atom_type=119,
             num_edge_type=5,
@@ -72,9 +72,6 @@ class DataLoaderMaskingPred(torch.utils.data.DataLoader):
             # 其余参数透传给 DataLoader
             **kwargs
         )
-    # 自定义 batch 拼接函数
-    # DataLoader 会自动从 dataset 里取出 batch_size 个元素（通常是图对象 Data）。
-    # 这 batch_size 个元素会组成一个 list，然后被传给 collate_fn 的参数 batches。
     def collate_fn(self, batches):
         # 对 batch 中每个图做mask
         batchs = [self._transform(x) for x in batches]
