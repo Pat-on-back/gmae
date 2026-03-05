@@ -464,18 +464,17 @@ class GNNDecoder(torch.nn.Module):
 
 class GNN_graphpred(torch.nn.Module):
     """
-    Extension of GIN to incorporate edge information by concatenation.
-
-    Args:
-        num_layer (int): the number of GNN layers
-        emb_dim (int): dimensionality of embeddings
-        num_tasks (int): number of tasks in multi-task learning scenario
-        drop_ratio (float): dropout rate
-        JK (str): last, concat, max or sum.
-        graph_pooling (str): sum, mean, max, attention, set2set
-        gnn_type: gin, gcn, graphsage, gat
+    将GIN扩展以通过拼接方式引入边信息。
+    参数：
+        num_layer (int): GNN层的数量
+        emb_dim (int): 嵌入的维度
+        num_tasks (int): 多任务学习场景中的任务数量
+        drop_ratio (float): Dropout率
+        JK (str): 选择方式，可为 'last'、'concat'、'max' 或 'sum'
+        graph_pooling (str): 图池化方法，可为 'sum'、'mean'、'max'、'attention'、'set2set'
+        gnn_type: 模型类型，可为 'gin'、'gcn'、'graphsage'、'gat'
         
-    See https://arxiv.org/abs/1810.00826
+    参考https://arxiv.org/abs/1810.00826
     JK-net: https://arxiv.org/abs/1806.03536
     """
     def __init__(self, num_layer, emb_dim, num_tasks, JK = "last", drop_ratio = 0, graph_pooling = "mean", gnn_type = "gin"):
@@ -491,20 +490,20 @@ class GNN_graphpred(torch.nn.Module):
 
         self.gnn = GNN(num_layer, emb_dim, JK, drop_ratio, gnn_type = gnn_type)
 
-        #Different kind of graph pooling
-        if graph_pooling == "sum":
+        # 不同的图池化
+        if graph_pooling == "sum": # 保留节点数量信息
             self.pool = global_add_pool
-        elif graph_pooling == "mean":
+        elif graph_pooling == "mean": # 对图大小更稳定
             self.pool = global_mean_pool
-        elif graph_pooling == "max":
+        elif graph_pooling == "max": # 捕获最显著特征
             self.pool = global_max_pool
-        elif graph_pooling == "attention":
-            if self.JK == "concat":
+        elif graph_pooling == "attention": # 使用注意力机制对节点表示进行加权汇聚
+            if self.JK == "concat": # gate_nn给出标量权重
                 self.pool = GlobalAttention(gate_nn = torch.nn.Linear((self.num_layer + 1) * emb_dim, 1))
             else:
                 self.pool = GlobalAttention(gate_nn = torch.nn.Linear(emb_dim, 1))
-        elif graph_pooling[:-1] == "set2set":
-            set2set_iter = int(graph_pooling[-1])
+        elif graph_pooling[:-1] == "set2set": # set2set 池化
+            set2set_iter = int(graph_pooling[-1]) # 取set2set的迭代次数
             if self.JK == "concat":
                 self.pool = Set2Set((self.num_layer + 1) * emb_dim, set2set_iter)
             else:
@@ -512,19 +511,17 @@ class GNN_graphpred(torch.nn.Module):
         else:
             raise ValueError("Invalid graph pooling type.")
 
-        #For graph-level binary classification
         if graph_pooling[:-1] == "set2set":
-            self.mult = 2
+            self.mult = 2 # Set2Set pooling 的输出维度是输入维度的 2 倍
         else:
             self.mult = 1
-        
+        # 任务预测层
         if self.JK == "concat":
             self.graph_pred_linear = torch.nn.Linear(self.mult * (self.num_layer + 1) * self.emb_dim, self.num_tasks)
         else:
             self.graph_pred_linear = torch.nn.Linear(self.mult * self.emb_dim, self.num_tasks)
-
+    # 加载预训练权重
     def from_pretrained(self, model_file):
-        #self.gnn = GNN(self.num_layer, self.emb_dim, JK = self.JK, drop_ratio = self.drop_ratio)
         self.gnn.load_state_dict(torch.load(model_file))
 
     def forward(self, *argv):
